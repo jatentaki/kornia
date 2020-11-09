@@ -101,7 +101,7 @@ def _compute_translation_matrix(translation: torch.Tensor) -> torch.Tensor:
 def _compute_scaling_matrix(scale: torch.Tensor,
                             center: torch.Tensor) -> torch.Tensor:
     """Computes affine matrix for scaling."""
-    angle: torch.Tensor = torch.zeros(scale.shape[:1])
+    angle: torch.Tensor = torch.zeros(scale.shape[:1], device=scale.device, dtype=scale.dtype)
     matrix: torch.Tensor = get_rotation_matrix2d(center, angle, scale)
     return matrix
 
@@ -528,6 +528,7 @@ class Rescale(nn.Module):
     Returns:
         torch.Tensor: The rescaled tensor.
     """
+
     def __init__(
         self, factor: Union[float, Tuple[float, float]], interpolation: str = "bilinear", align_corners: bool = False
     ) -> None:
