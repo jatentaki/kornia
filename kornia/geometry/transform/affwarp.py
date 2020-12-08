@@ -7,7 +7,7 @@ from kornia.geometry.transform.imgwarp import (
     warp_affine, get_rotation_matrix2d, get_affine_matrix2d
 )
 from kornia.geometry.transform.projwarp import (
-    warp_projective, get_projective_transform
+    warp_affine3d, get_projective_transform
 )
 
 __all__ = [
@@ -47,9 +47,9 @@ def _compute_tensor_center3d(tensor: torch.Tensor) -> torch.Tensor:
     """Computes the center of tensor plane for (D, H, W), (C, D, H, W) and (B, C, D, H, W)."""
     assert 3 <= len(tensor.shape) <= 5, f"Must be a 3D tensor as DHW, CDHW and BCDHW. Got {tensor.shape}."
     depth, height, width = tensor.shape[-3:]
-    center_x: float = float(depth - 1) / 2
+    center_x: float = float(width - 1) / 2
     center_y: float = float(height - 1) / 2
-    center_z: float = float(width - 1) / 2
+    center_z: float = float(depth - 1) / 2
     center: torch.Tensor = torch.tensor(
         [center_x, center_y, center_z],
         device=tensor.device, dtype=tensor.dtype)
@@ -185,8 +185,8 @@ def affine3d(tensor: torch.Tensor, matrix: torch.Tensor, mode: str = 'bilinear',
     depth: int = tensor.shape[-3]
     height: int = tensor.shape[-2]
     width: int = tensor.shape[-1]
-    warped: torch.Tensor = warp_projective(tensor, matrix, (depth, height, width), mode,
-                                           align_corners=align_corners)
+    warped: torch.Tensor = warp_affine3d(tensor, matrix, (depth, height, width), mode,
+                                         align_corners=align_corners)
 
     # return in the original shape
     if is_unbatched:
@@ -243,8 +243,11 @@ def rotate3d(tensor: torch.Tensor, yaw: torch.Tensor, pitch: torch.Tensor, roll:
         raise TypeError("Input tensor type is not a torch.Tensor. Got {}"
                         .format(type(tensor)))
     if not torch.is_tensor(yaw):
-        raise TypeError("Input angle type is not a torch.Tensor. Got {}"
-                        .format(type(yaw)))
+        raise TypeError("yaw is not a torch.Tensor. Got {}".format(type(yaw)))
+    if not torch.is_tensor(pitch):
+        raise TypeError("pitch is not a torch.Tensor. Got {}".format(type(pitch)))
+    if not torch.is_tensor(roll):
+        raise TypeError("roll is not a torch.Tensor. Got {}".format(type(roll)))
     if center is not None and not torch.is_tensor(center):
         raise TypeError("Input center type is not a torch.Tensor. Got {}"
                         .format(type(center)))
@@ -259,8 +262,8 @@ def rotate3d(tensor: torch.Tensor, yaw: torch.Tensor, pitch: torch.Tensor, roll:
     # compute the rotation matrix
     # TODO: add broadcasting to get_rotation_matrix2d for center
     yaw = yaw.expand(tensor.shape[0])
-    pitch = yaw.expand(tensor.shape[0])
-    roll = yaw.expand(tensor.shape[0])
+    pitch = pitch.expand(tensor.shape[0])
+    roll = roll.expand(tensor.shape[0])
     center = center.expand(tensor.shape[0], -1)
     rotation_matrix: torch.Tensor = _compute_rotation_matrix3d(yaw, pitch, roll, center)
 

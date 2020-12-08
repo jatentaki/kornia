@@ -35,7 +35,7 @@ class DepthWarper(nn.Module):
         padding_mode (str): padding mode for outside grid values
            'zeros' | 'border' | 'reflection'. Default: 'zeros'.
         align_corners(bool): interpolation flag. Default: True. See
-        https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.interpolate for detail
+          https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.interpolate for detail
     """
 
     def __init__(self,
@@ -183,11 +183,13 @@ class DepthWarper(nn.Module):
 
         Example:
             >>> # pinholes camera models
-            >>> pinhole_dst = kornia.PinholeCamera(...)
-            >>> pinhole_src = kornia.PinholeCamera(...)
+            >>> pinhole_dst = PinholeCamera(torch.randn(1, 4, 4), torch.randn(1, 4, 4),
+            ... torch.tensor([32]), torch.tensor([32]))
+            >>> pinhole_src = PinholeCamera(torch.randn(1, 4, 4), torch.randn(1, 4, 4),
+            ... torch.tensor([32]), torch.tensor([32]))
             >>> # create the depth warper, compute the projection matrix
-            >>> warper = kornia.DepthWarper(pinhole_dst, height, width)
-            >>> warper.compute_projection_matrix(pinhole_src)
+            >>> warper = DepthWarper(pinhole_dst, 32, 32)
+            >>> _ = warper.compute_projection_matrix(pinhole_src)
             >>> # warp the destionation frame to reference by depth
             >>> depth_src = torch.ones(1, 1, 32, 32)  # Nx1xHxW
             >>> image_dst = torch.rand(1, 3, 32, 32)  # NxCxHxW
@@ -213,13 +215,14 @@ def depth_warp(pinhole_dst: PinholeCamera,
 
     Example:
         >>> # pinholes camera models
-        >>> pinhole_dst = kornia.PinholeCamera(...)
-        >>> pinhole_src = kornia.PinholeCamera(...)
+        >>> pinhole_dst = PinholeCamera(torch.randn(1, 4, 4), torch.randn(1, 4, 4),
+        ... torch.tensor([32]), torch.tensor([32]))
+        >>> pinhole_src = PinholeCamera(torch.randn(1, 4, 4), torch.randn(1, 4, 4),
+        ... torch.tensor([32]), torch.tensor([32]))
         >>> # warp the destionation frame to reference by depth
         >>> depth_src = torch.ones(1, 1, 32, 32)  # Nx1xHxW
         >>> image_dst = torch.rand(1, 3, 32, 32)  # NxCxHxW
-        >>> image_src = kornia.depth_warp(pinhole_dst, pinhole_src,
-        >>>     depth_src, image_dst, height, width)  # NxCxHxW
+        >>> image_src = depth_warp(pinhole_dst, pinhole_src, depth_src, image_dst, 32, 32)  # NxCxHxW
     """
     warper = DepthWarper(pinhole_dst, height, width, align_corners=align_corners)
     warper.compute_projection_matrix(pinhole_src)
