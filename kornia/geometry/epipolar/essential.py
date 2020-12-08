@@ -169,7 +169,7 @@ def motion_from_essential_choose_solution(
     assert len(E_mat.shape[:-2]) == len(K1.shape[:-2]) == len(K2.shape[:-2])
     if mask is not None:
         assert len(mask.shape) >= 2, mask.shape
-        assert len(mask.shape[:-2]) == len(x1.shape[:-2]), mask.shape
+        assert mask.shape == x1.shape[:-1], mask.shape
 
     # compute four possible pose solutions
     Rs, ts = motion_from_essential(E_mat)
@@ -203,7 +203,7 @@ def motion_from_essential_choose_solution(
     if mask is None:
         mask = ((d1 > 0.) & (d2 > 0.))
     else:
-        mask = ((d1 > 0.) & (d2 > 0.)) & mask
+        mask = ((d1 > 0.) & (d2 > 0.)) & mask.unsqueeze(1)
     mask_indices = torch.max(mask.sum(-1), dim=-1, keepdim=True)[1]
 
     # get pose and points 3d and return
