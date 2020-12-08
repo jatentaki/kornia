@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional, Union, Callable
 import warnings
 
 import torch
@@ -44,8 +44,17 @@ class PinholeCamera:
 
     @staticmethod
     def _check_valid(data_iter: Iterable[torch.Tensor]) -> bool:
-        if not all(data.shape[0] for data in data_iter):
-            raise ValueError("Arguments shapes must match")
+        data_iter = iter(data_iter)
+        first = next(data_iter)
+
+        for data in data_iter:
+            if data.shape[0] != first.shape[0]:
+                raise ValueError("Arguments shapes must match")
+            if data.dtype != first.dtype:
+                raise ValueError("Arguments dtypes must match")
+            if data.device != first.device:
+                raise ValueError("Arguments devices must match")
+
         return True
 
     @staticmethod
@@ -65,6 +74,7 @@ class PinholeCamera:
         if not len(data.shape) == 1:
             raise ValueError("Argument {0} shape must be in the following shape"
                              " B. Got {1}".format(data_name, data.shape))
+
         return True
 
     @property
@@ -219,14 +229,6 @@ class PinholeCamera:
         """
         return self.extrinsics[..., :3, -1:]
 
-    def clone(self) -> 'PinholeCamera':
-        r"""Returns a deep copy of the current object instance."""
-        height: torch.Tensor = self.height.clone()
-        width: torch.Tensor = self.width.clone()
-        intrinsics: torch.Tensor = self.intrinsics.clone()
-        extrinsics: torch.Tensor = self.extrinsics.clone()
-        return PinholeCamera(intrinsics, extrinsics, height, width)
-
     def intrinsics_inverse(self) -> torch.Tensor:
         r"""Returns the inverse of the 4x4 instrisics matrix.
 
@@ -277,6 +279,68 @@ class PinholeCamera:
         self.height *= scale_factor
         self.width *= scale_factor
         return self
+
+    def apply(self, f: Callable[[torch.Tensor], torch.Tensor]) -> 'PinholeCamera':
+        r"""Returns a PinholeCamera with callback f applied to all its tensor
+        members.
+        """
+        return PinholeCamera(
+            f(self.intrinsics),
+            f(self.extrinsics),
+            f(self.height),
+            f(self.width),
+        )
+
+    def clone(self) -> 'PinholeCamera':
+        r"""Returns a deep copy of the current object instance."""
+        return self.apply(lambda tensor: tensor.clone())
+
+    def to(self, *args, **kwargs) -> 'PinholeCamera':
+        r"""Returns PinholeCamera with torch.Tensor.to(*args, **kwrags) applied
+        to all tensor members.
+
+        .. note::
+            Useful for moving PinholeCamera between CPU and GPU.
+        """
+        return self.apply(lambda tensor: tensor.to(*args, **kwargs))
+
+    def __getitem__(self, index: Union[int, slice]) -> 'PinholeCamera':
+        r"""Sub-selects PinholeCamera across the batch dimension.
+
+        Args:
+            index (slice or int): the range to select. Range selections
+            (`camera[start:end]`) as well as integer selections
+            (`camera[index]`) are supported, but because PinholeCamera always has
+            a leading batch dimension the latter is just shorthand for
+            `camera[index:index+1]`.
+
+        Example:
+            >>> intrinsics = torch.randn(3, 4, 4)
+            >>> extrinsics = torch.randn(3, 4, 4)
+            >>> height = torch.randn(3)
+            >>> width = torch.randn(3)
+            >>> camera = PinholeCamera(intrinsics, extrinsics, height, width)
+            >>> sliced = camera[1:]
+            >>> assert (sliced.intrinsics == camera.intrinsics[1:]).all()
+        """
+        if not isinstance(index, (int, slice)):
+            raise TypeError("PinholeCamera can be indexed only with integers "
+                            f"or integer slices, got {type(index)}.")
+
+        # we have to keep the batch dimension
+        if isinstance(index, int):
+            index = slice(index, index + 1)
+
+        return self.apply(lambda t: t[index])
+
+    def pin_memory(self) -> 'PinholeCamera':
+        r"""Returns the PinholeCamera with member tensors moved to pinned memory"""
+        return self.apply(lambda t: t.pin_memory())
+
+    @property
+    def device(self) -> torch.device:
+        r"""Returns the device on which tensors of PinholeCamera reside"""
+        return self.intrinsics.device
 
     # NOTE: just for test. Decide if we keep it.
     @classmethod

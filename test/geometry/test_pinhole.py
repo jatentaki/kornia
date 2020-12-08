@@ -32,6 +32,51 @@ class TestPinholeCamera:
         pinhole = kornia.PinholeCamera(intrinsics, extrinsics, height, width)
         assert isinstance(pinhole, kornia.PinholeCamera)
 
+    @pytest.mark.parametrize("batch_size", [2, 5])
+    def test_throws_different_batch_size(self, device, batch_size):
+        height, width = 4, 6
+        fx, fy, cx, cy = 1, 2, width / 2, height / 2
+        tx, ty, tz = 1, 2, 3
+
+        intrinsics = self._create_intrinsics(batch_size, fx, fy, cx, cy).to(device)
+        extrinsics = self._create_extrinsics(1, tx, ty, tz).to(device)
+        height = torch.ones(batch_size).to(device) * height
+        width = torch.ones(batch_size).to(device) * width
+
+        with pytest.raises(ValueError):
+            pinhole = kornia.PinholeCamera(intrinsics, extrinsics, height, width)
+
+    @pytest.mark.parametrize("batch_size", [2, 5])
+    def test_throws_different_dtype(self, device, batch_size):
+        height, width = 4, 6
+        fx, fy, cx, cy = 1, 2, width / 2, height / 2
+        tx, ty, tz = 1, 2, 3
+
+        intrinsics = self._create_intrinsics(batch_size, fx, fy, cx, cy).to(device)
+        extrinsics = self._create_extrinsics(batch_size, tx, ty, tz).to(device)
+        height = torch.ones(batch_size, dtype=torch.int64).to(device) * height
+        width = torch.ones(batch_size).to(device) * width
+
+        with pytest.raises(ValueError):
+            pinhole = kornia.PinholeCamera(intrinsics, extrinsics, height, width)
+
+    @pytest.mark.parametrize("batch_size", [2, 5])
+    def test_throws_different_device(self, device, batch_size):
+        if 'cuda' not in str(device):
+            pytest.skip('This test is cuda-specific')
+
+        height, width = 4, 6
+        fx, fy, cx, cy = 1, 2, width / 2, height / 2
+        tx, ty, tz = 1, 2, 3
+
+        intrinsics = self._create_intrinsics(batch_size, fx, fy, cx, cy).to(device)
+        extrinsics = self._create_extrinsics(batch_size, tx, ty, tz).cpu()
+        height = torch.ones(batch_size).to(device) * height
+        width = torch.ones(batch_size).to(device) * width
+
+        with pytest.raises(ValueError):
+            pinhole = kornia.PinholeCamera(intrinsics, extrinsics, height, width)
+
     def test_pinhole_camera_attributes(self, device):
         batch_size = 1
         height, width = 4, 6
@@ -191,6 +236,80 @@ class TestPinholeCamera:
             pinhole_scale.height, pinhole.height * scale_val)
         assert_allclose(
             pinhole_scale.width, pinhole.width * scale_val)
+
+    def _make_example_camera(self):
+        return kornia.PinholeCamera(
+            torch.randn(3, 4, 4),
+            torch.randn(3, 4, 4),
+            torch.randn(3),
+            torch.randn(3),
+        )
+
+    def test_to_dtype(self, device):
+        camera = self._make_example_camera().to(device)
+        assert camera.extrinsics.dtype == torch.float32
+
+        camera = camera.to(torch.float64)
+        assert camera.extrinsics.dtype == torch.float64
+        assert camera.intrinsics.dtype == torch.float64
+        assert camera.height.dtype == torch.float64
+        assert camera.width.dtype == torch.float64
+
+        camera = camera.to(torch.float32)
+        assert camera.extrinsics.dtype == torch.float32
+        assert camera.intrinsics.dtype == torch.float32
+        assert camera.height.dtype == torch.float32
+        assert camera.width.dtype == torch.float32
+
+    def test_to_device(self, device):
+        if 'cuda' not in str(device):
+            pytest.skip('This test is cuda-specific')
+
+        cpu = torch.device('cpu')
+        gpu = torch.device('cuda')
+
+        camera = self._make_example_camera()
+        assert camera.device == cpu
+
+        camera = camera.to(gpu)
+        assert camera.device == gpu
+
+        camera = camera.to(cpu)
+        assert camera.device == cpu
+
+    def test_pin_memory(self, device):
+        if 'cuda' not in str(device):
+            pytest.skip('This test is cuda-specific')
+
+        camera = self._make_example_camera().to(device)
+        assert not camera.intrinsics.is_pinned()
+        assert not camera.extrinsics.is_pinned()
+        assert not camera.height.is_pinned()
+        assert not camera.width.is_pinned()
+
+        camera = camera.pin_memory()
+        assert camera.intrinsics.is_pinned()
+        assert camera.extrinsics.is_pinned()
+        assert camera.height.is_pinned()
+        assert camera.width.is_pinned()
+
+    def test_getitem_slice(self, device):
+        camera = self._make_example_camera().to(device)
+
+        sliced = camera[1:]
+        assert (sliced.intrinsics == camera.intrinsics[1:]).all().item()
+        assert (sliced.extrinsics == camera.extrinsics[1:]).all().item()
+        assert (sliced.height == camera.height[1:]).all().item()
+        assert (sliced.width == camera.width[1:]).all().item()
+
+    def test_getitem_int(self, device):
+        camera = self._make_example_camera().to(device)
+
+        sliced = camera[1]
+        assert (sliced.intrinsics[0] == camera.intrinsics[1]).all().item()
+        assert (sliced.extrinsics[0] == camera.extrinsics[1]).all().item()
+        assert (sliced.height[0] == camera.height[1]).all().item()
+        assert (sliced.width[0] == camera.width[1]).all().item()
 
 
 '''@pytest.mark.parametrize("batch_size", [1, 2, 5, 6])
