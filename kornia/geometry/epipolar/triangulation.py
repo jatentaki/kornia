@@ -3,6 +3,28 @@
 import torch
 import kornia
 
+try:
+    import torch_batch_svd
+except ImportError:
+    torch_batch_svd = None
+
+def svd_wrapper(tensor):
+    if 'cuda' not in str(tensor.device):
+        return torch.svd(tensor)
+
+    if torch_batch_svd is None:
+        U, s, V = torch.svd(tensor.cpu())
+        return U.to(tensor.device), s.to(tensor.device), V.to(tensor.device)
+
+    head = lambda t: t.shape[:-2]
+    tail = lambda t: t.shape[-2:]
+
+    U, s, V =  torch_batch_svd.svd(tensor.reshape(-1, *tail(tensor)))
+    U = U.reshape(*head(tensor), *tail(U))
+    s = s.reshape(*head(tensor), -1)
+    V = V.reshape(*head(tensor), *tail(V))
+
+    return U, s, V
 
 # https://github.com/opencv/opencv_contrib/blob/master/modules/sfm/src/triangulation.cpp#L68
 
